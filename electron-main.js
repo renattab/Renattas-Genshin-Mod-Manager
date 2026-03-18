@@ -25,7 +25,7 @@ let allowWindowClose = false;
 function startServer() {
   const serverPath = path.join(__dirname, "server.js");
   serverProcess = spawn(process.execPath, [serverPath], {
-    env: { ...process.env, RGMM_ELECTRON: "1" },
+    env: { ...process.env, RGMM_ELECTRON: "1", ELECTRON_RUN_AS_NODE: "1" },
     stdio: "inherit",
     windowsHide: true,
   });
@@ -82,10 +82,23 @@ function createWindow() {
 
 function stopServer() {
   if (!serverProcess) return;
-  try {
-    serverProcess.kill();
-  } catch {
-    // ignore
+  const pid = serverProcess.pid;
+  if (process.platform === "win32" && pid) {
+    try {
+      const killer = spawn("taskkill.exe", ["/pid", String(pid), "/t", "/f"], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+      killer.unref();
+    } catch {
+      // ignore
+    }
+  } else {
+    try {
+      serverProcess.kill("SIGTERM");
+    } catch {
+      // ignore
+    }
   }
   serverProcess = null;
 }
@@ -138,4 +151,7 @@ app.on("before-quit", () => {
 });
 
 app.on("window-all-closed", () => {
+  if (!isQuitting) {
+    app.quit();
+  }
 });

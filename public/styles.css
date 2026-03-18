@@ -186,6 +186,11 @@ body {
   gap: 8px;
 }
 
+.update-banner[hidden],
+.update-banner-status[hidden] {
+  display: none !important;
+}
+
 .update-banner-main {
   display: flex;
   gap: 12px;

@@ -676,7 +676,10 @@ function renderUpdateBanner() {
   ) return;
   const info = state.update;
   const status = state.updateStatus;
-  const shouldShow = Boolean((info?.hasUpdate && info?.downloadUrl) || status?.running || status?.done);
+  const hasRealUpdate = Boolean(info?.hasUpdate && info?.downloadUrl);
+  const hasRunningUpdate = Boolean(status?.running);
+  const hasUpdateError = Boolean(status?.done && status?.ok === false && status?.error);
+  const shouldShow = hasRealUpdate || hasRunningUpdate || hasUpdateError;
   if (!shouldShow) {
     updateBanner.hidden = true;
     updateBannerText.textContent = "";
@@ -687,9 +690,12 @@ function renderUpdateBanner() {
   }
 
   updateBanner.hidden = false;
-  updateBannerText.textContent = `Nueva versión disponible: ${info?.currentVersion || "sin versión"} ➜ ${info?.latestVersion || "?"}`;
-  updateBannerAction.disabled = Boolean(status?.running);
-  updateBannerAction.textContent = status?.running ? "Actualizando..." : "Descargar";
+  updateBannerText.textContent = hasRealUpdate
+    ? `Nueva versión disponible: ${info?.currentVersion || "sin versión"} ➜ ${info?.latestVersion || "?"}`
+    : "Error al actualizar";
+  updateBannerAction.disabled = !hasRealUpdate || hasRunningUpdate;
+  updateBannerAction.hidden = !hasRealUpdate;
+  updateBannerAction.textContent = hasRunningUpdate ? "Actualizando..." : "Descargar";
 
   const statusMessage = status?.error || status?.message || "";
   if (statusMessage) {
@@ -735,9 +741,7 @@ async function loadUpdateStatus() {
     } else {
       stopUpdateStatusPolling();
       if (state.updateStatus?.done && state.updateStatus?.ok) {
-        await loadUpdateInfo();
-        state.updateStatus = null;
-        renderUpdateBanner();
+        await requestAppExit();
       }
     }
   } catch {
@@ -747,13 +751,24 @@ async function loadUpdateStatus() {
 
 async function loadUpdateInfo() {
   try {
-    const response = await fetch("/api/update-check");
+    const response = await fetch("/api/update-check?force=1");
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.ok !== true) return;
     state.update = data;
+    if (!state.update?.hasUpdate) {
+      state.updateStatus = null;
+    }
     renderUpdateBanner();
   } catch {
     // ignore update check failures to keep startup offline-friendly
+  }
+}
+
+async function requestAppExit() {
+  try {
+    await fetch("/api/exit", { method: "POST" });
+  } catch {
+    window.close();
   }
 }
 
