@@ -36,11 +36,11 @@ const exitApp = document.getElementById("exitApp");
 
 const isElectronHost = new URLSearchParams(window.location.search).has("rgmm");
 if (!isElectronHost) {
-  if (!window.opener && window.name !== "rgmm_main") {
-    const opened = window.open(window.location.href, "rgmm_main");
-    if (opened) {
-      opened.focus();
-      window.close();
+if (!window.opener && window.name !== "rgmm_main") {
+  const opened = window.open(window.location.href, "rgmm_main");
+  if (opened) {
+    opened.focus();
+    window.close();
     } else {
       window.name = "rgmm_main";
     }
@@ -50,6 +50,7 @@ if (!isElectronHost) {
 } else if (window.name !== "rgmm_main") {
   window.name = "rgmm_main";
 }
+
 const openThemeFromSettings = document.getElementById("openThemeFromSettings");
 const settingsModal = document.getElementById("settingsModal");
 const settingsForm = document.getElementById("settingsForm");
@@ -72,6 +73,7 @@ const themeModal = document.getElementById("themeModal");
 const themeForm = document.getElementById("themeForm");
 const themeCancel = document.getElementById("themeCancel");
 const activeConflictBanner = document.getElementById("activeConflictBanner");
+const characterDock = document.getElementById("characterDock");
 const characterDockList = document.getElementById("characterDockList");
 const mminfoModal = document.getElementById("mminfoModal");
 const mminfoForm = document.getElementById("mminfoForm");
@@ -122,6 +124,34 @@ let importState = {
 };
 let reopenMmInfoAfterInfoImport = false;
 let infoImportDetectedCharacter = "";
+
+function applyCharacterDockLayout() {
+  if (!characterDock) return;
+  const isCompact = window.innerWidth <= 980;
+  characterDock.style.display = "grid";
+  if (isCompact) {
+    characterDock.style.position = "fixed";
+    characterDock.style.left = "12px";
+    characterDock.style.right = "12px";
+    characterDock.style.bottom = "12px";
+    characterDock.style.top = "auto";
+    characterDock.style.width = "auto";
+    characterDock.style.maxHeight = "30vh";
+    characterDock.style.margin = "0";
+  } else {
+    characterDock.style.position = "";
+    characterDock.style.left = "";
+    characterDock.style.right = "";
+    characterDock.style.bottom = "";
+    characterDock.style.top = "";
+    characterDock.style.width = "";
+    characterDock.style.maxHeight = "";
+    characterDock.style.margin = "";
+  }
+}
+
+applyCharacterDockLayout();
+window.addEventListener("resize", applyCharacterDockLayout);
 
 function arrayBufferToBase64(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);

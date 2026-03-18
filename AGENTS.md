@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Proyecto
-RGMM (Renatta's Genshin Mod Manager) es un mod manager local para Genshin basado en Node.js. El servidor es HTTP nativo en `server.js` y el frontend vive en `public/`.
+RGMM (Renatta's Genshin Mod Manager) es un mod manager local para Genshin basado en Node.js con wrapper de Electron. El servidor es HTTP nativo en `server.js`, el frontend vive en `public/` y Electron arranca todo desde `electron-main.js`.
 
 ## Objetivo
 Mantener la app simple, offline-first y segura para rutas locales. Evitar dependencias innecesarias.
@@ -9,6 +9,7 @@ Mantener la app simple, offline-first y segura para rutas locales. Evitar depend
 ## Estructura clave
 - Backend: `server.js`
 - Frontend: `public/index.html`, `public/app.js`, `public/styles.css`
+- Electron wrapper: `electron-main.js` (lanza servidor y carga UI)
 - Datos: `3dmigoto/` (carpetas `Mods`, `Disable`, `Personajes`)
 - Metadatos: `mminfo.txt` por mod de personaje (no usar `.json`)
 - Ajustes: `settings.json`

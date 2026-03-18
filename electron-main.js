@@ -4,6 +4,10 @@ const http = require("http");
 const path = require("path");
 
 app.commandLine.appendSwitch("disable-gpu");
+const userDataPath = path.join(app.getPath("appData"), "RGMM");
+app.setPath("userData", userDataPath);
+app.setPath("cache", path.join(userDataPath, "Cache"));
+app.commandLine.appendSwitch("disk-cache-dir", path.join(userDataPath, "Cache"));
 
 const SERVER_PORT = 3210;
 const SERVER_URL = `http://localhost:${SERVER_PORT}`;
@@ -11,6 +15,12 @@ const SERVER_URL_ELECTRON = `${SERVER_URL}/?rgmm=1`;
 let serverProcess = null;
 let mainWindow = null;
 let isQuitting = false;
+const appIconPath = path.join(__dirname, "icon.ico");
+
+if (process.platform === "win32") {
+  app.setAppUserModelId("com.renatta.rgmm");
+}
+let allowWindowClose = false;
 
 function startServer() {
   const serverPath = path.join(__dirname, "server.js");
@@ -32,6 +42,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 640,
     show: false,
+    icon: appIconPath,
     webPreferences: {
       contextIsolation: true,
     },
@@ -54,8 +65,10 @@ function createWindow() {
   mainWindow.loadURL("about:blank");
 
   mainWindow.on("close", (event) => {
-    if (!isQuitting) {
+    if (!allowWindowClose) {
       event.preventDefault();
+      allowWindowClose = true;
+      app.quit();
     }
   });
 

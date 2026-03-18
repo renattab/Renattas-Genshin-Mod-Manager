@@ -586,9 +586,18 @@ body {
     width: min(1080px, calc(100vw - 32px));
     max-width: 1080px;
     margin: 0 auto;
+    padding-bottom: 40vh;
   }
   .character-dock {
-    display: none;
+    display: grid;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    top: auto;
+    width: auto;
+    max-height: 30vh;
+    margin: 0;
   }
 }
 

@@ -6,14 +6,39 @@
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
-    "start:server": "node server.js"
+    "start:server": "node server.js",
+    "build:electron": "electron-builder --win portable"
   },
   "dependencies": {
     "cheerio": "^1.2.0"
   },
   "devDependencies": {
     "@yao-pkg/pkg": "^6.14.1",
+    "electron-builder": "^24.13.3",
     "electron": "^31.2.0",
     "pkg": "^5.8.1"
+  },
+  "build": {
+    "appId": "com.renatta.rgmm",
+    "productName": "RGMM",
+    "asar": false,
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!3dmigoto/**",
+      "!node_modules/.cache/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "icon.ico"
+    },
+    "portable": {
+      "artifactName": "RGMM.exe"
+    }
   }
 }
