@@ -4,6 +4,7 @@ const state = {
   search: "",
   busyIds: new Set(),
   update: null,
+  updateStatus: null,
   settings: {
     paths: { gimi: "", genshin: "" },
     characterNames: [],
@@ -77,7 +78,10 @@ const themeCancel = document.getElementById("themeCancel");
 const activeConflictBanner = document.getElementById("activeConflictBanner");
 const updateBanner = document.getElementById("updateBanner");
 const updateBannerText = document.getElementById("updateBannerText");
-const updateBannerLink = document.getElementById("updateBannerLink");
+const updateBannerAction = document.getElementById("updateBannerAction");
+const updateBannerStatus = document.getElementById("updateBannerStatus");
+const updateBannerStatusText = document.getElementById("updateBannerStatusText");
+const updateBannerProgressBar = document.getElementById("updateBannerProgressBar");
 const characterDock = document.getElementById("characterDock");
 const characterDockList = document.getElementById("characterDockList");
 const mminfoModal = document.getElementById("mminfoModal");
@@ -662,19 +666,83 @@ function renderActiveConflictBanner() {
 }
 
 function renderUpdateBanner() {
-  if (!updateBanner || !updateBannerText || !updateBannerLink) return;
+  if (
+    !updateBanner ||
+    !updateBannerText ||
+    !updateBannerAction ||
+    !updateBannerStatus ||
+    !updateBannerStatusText ||
+    !updateBannerProgressBar
+  ) return;
   const info = state.update;
-  if (!info?.hasUpdate || !info?.downloadUrl) {
+  const status = state.updateStatus;
+  const shouldShow = Boolean((info?.hasUpdate && info?.downloadUrl) || status?.running || status?.done);
+  if (!shouldShow) {
     updateBanner.hidden = true;
     updateBannerText.textContent = "";
-    updateBannerLink.href = "#";
+    updateBannerStatus.hidden = true;
+    updateBannerStatusText.textContent = "";
+    updateBannerProgressBar.style.width = "0%";
     return;
   }
 
   updateBanner.hidden = false;
-  updateBannerText.textContent =
-    `Hay una versión nueva en GitHub. Tienes ${info.currentVersion || "sin versión"} y la última es ${info.latestVersion}.`;
-  updateBannerLink.href = info.downloadUrl;
+  updateBannerText.textContent = `Nueva versión disponible: ${info?.currentVersion || "sin versión"} ➜ ${info?.latestVersion || "?"}`;
+  updateBannerAction.disabled = Boolean(status?.running);
+  updateBannerAction.textContent = status?.running ? "Actualizando..." : "Descargar";
+
+  const statusMessage = status?.error || status?.message || "";
+  if (statusMessage) {
+    updateBannerStatus.hidden = false;
+    updateBannerStatusText.textContent = statusMessage;
+    updateBannerProgressBar.style.width = `${Math.max(0, Math.min(100, status?.progress || 0))}%`;
+  } else {
+    updateBannerStatus.hidden = true;
+    updateBannerStatusText.textContent = "";
+    updateBannerProgressBar.style.width = "0%";
+  }
+}
+
+let updateStatusTimer = null;
+
+function ensureUpdateStatusPolling() {
+  if (updateStatusTimer) return;
+  updateStatusTimer = setInterval(loadUpdateStatus, 1000);
+}
+
+function stopUpdateStatusPolling() {
+  if (!updateStatusTimer) return;
+  clearInterval(updateStatusTimer);
+  updateStatusTimer = null;
+}
+
+async function loadUpdateStatus() {
+  try {
+    const response = await fetch("/api/update-status");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok !== true) return;
+    state.updateStatus = data.status || null;
+    if (state.updateStatus?.done && state.updateStatus?.ok && state.update) {
+      state.update = {
+        ...state.update,
+        currentVersion: state.update.latestVersion || state.update.currentVersion,
+        hasUpdate: false,
+      };
+    }
+    renderUpdateBanner();
+    if (state.updateStatus?.running) {
+      ensureUpdateStatusPolling();
+    } else {
+      stopUpdateStatusPolling();
+      if (state.updateStatus?.done && state.updateStatus?.ok) {
+        await loadUpdateInfo();
+        state.updateStatus = null;
+        renderUpdateBanner();
+      }
+    }
+  } catch {
+    // ignore
+  }
 }
 
 async function loadUpdateInfo() {
@@ -686,6 +754,21 @@ async function loadUpdateInfo() {
     renderUpdateBanner();
   } catch {
     // ignore update check failures to keep startup offline-friendly
+  }
+}
+
+async function startUpdateDownload() {
+  try {
+    const response = await fetch("/api/update-download", { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok !== true) {
+      throw new Error(data.error || "No se pudo iniciar la actualización.");
+    }
+    state.updateStatus = data.status || null;
+    renderUpdateBanner();
+    ensureUpdateStatusPolling();
+  } catch (error) {
+    alert(error.message);
   }
 }
 
@@ -1338,6 +1421,10 @@ openGenshinModsWeb.addEventListener("click", () => {
   window.open("https://gamebanana.com/mods/cats/18140", "_blank", "noopener,noreferrer");
 });
 
+if (updateBannerAction) {
+  updateBannerAction.addEventListener("click", startUpdateDownload);
+}
+
 openSettingsModal.addEventListener("click", () => {
   fillSettingsForm();
   openDialog(settingsModal, true);
@@ -1518,3 +1605,4 @@ Promise.all([loadSettings(), loadMods()]).catch((error) => {
   alert(error.message);
 });
 loadUpdateInfo();
+loadUpdateStatus();

@@ -182,6 +182,11 @@ body {
   background: rgba(92, 72, 14, 0.72);
   color: #ffe9a8;
   font-size: 0.9rem;
+  display: grid;
+  gap: 8px;
+}
+
+.update-banner-main {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -190,12 +195,44 @@ body {
 }
 
 .update-banner-link {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255, 244, 207, 0.16);
   color: #fff4cf;
   font-weight: 600;
+  cursor: pointer;
 }
 
 .update-banner-link:hover {
   color: #ffffff;
+  background: rgba(255, 244, 207, 0.24);
+}
+
+.update-banner-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.update-banner-status {
+  display: grid;
+  gap: 6px;
+  font-size: 0.84rem;
+}
+
+.update-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 244, 207, 0.12);
+}
+
+.update-progress-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #f3d66d 0%, #fff2bc 100%);
+  transition: width 0.2s ease;
 }
 
 #searchInput {

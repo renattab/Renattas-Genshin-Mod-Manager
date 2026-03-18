@@ -35,6 +35,7 @@ const VERSION_PATH = path.join(ROOT_DIR, "version.txt");
 const UPDATE_REPO_URL = "https://github.com/renattab/Renattas-Genshin-Mod-Manager";
 const UPDATE_BRANCHES = ["main", "master"];
 const UPDATE_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
+const UPDATE_PROTECTED_NAMES = new Set([".git", "node_modules", "3dmigoto", "settings.json", "characterNames.txt"]);
 const DEFAULT_SETTINGS = {
   paths: {
     gimi: "",
@@ -59,6 +60,15 @@ const DEFAULT_SETTINGS = {
 let updateCheckCache = {
   expiresAt: 0,
   value: null,
+};
+let updateInstallState = {
+  running: false,
+  done: false,
+  ok: true,
+  stage: "idle",
+  progress: 0,
+  message: "",
+  error: "",
 };
 
 function browserLikeHeaders() {
@@ -600,6 +610,163 @@ async function checkForUpdates(force = false) {
     value: result,
   };
   return result;
+}
+
+function setUpdateInstallState(patch) {
+  updateInstallState = {
+    ...updateInstallState,
+    ...patch,
+  };
+}
+
+function getUpdateInstallState() {
+  return { ...updateInstallState };
+}
+
+async function copyUpdateEntry(sourcePath, targetPath, entry) {
+  if (entry.isDirectory()) {
+    await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
+    await fs.cp(sourcePath, targetPath, { recursive: true, force: true });
+    return;
+  }
+  await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  await fs.copyFile(sourcePath, targetPath);
+}
+
+async function applyExtractedUpdate(extractedRoot) {
+  const entries = await fs.readdir(extractedRoot, { withFileTypes: true });
+  const candidates = entries.filter((entry) => !UPDATE_PROTECTED_NAMES.has(entry.name));
+  for (let index = 0; index < candidates.length; index += 1) {
+    const entry = candidates[index];
+    const progress = 70 + Math.round(((index + 1) / Math.max(candidates.length, 1)) * 25);
+    setUpdateInstallState({
+      stage: "installing",
+      progress,
+      message: `Instalando: ${entry.name}`,
+    });
+    await copyUpdateEntry(path.join(extractedRoot, entry.name), path.join(ROOT_DIR, entry.name), entry);
+  }
+}
+
+async function findExtractedRepoRoot(extractDir) {
+  const entries = await fs.readdir(extractDir, { withFileTypes: true });
+  const firstDir = entries.find((entry) => entry.isDirectory());
+  if (!firstDir) throw new Error("No se encontró la carpeta extraída de la actualización.");
+  return path.join(extractDir, firstDir.name);
+}
+
+async function downloadFileWithProgress(fileUrl, destinationPath) {
+  const response = await fetch(fileUrl, {
+    headers: browserLikeHeaders(),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!response.ok || !response.body) {
+    throw new Error("No se pudo descargar la actualización desde GitHub.");
+  }
+
+  const total = Number(response.headers.get("content-length") || 0);
+  const reader = response.body.getReader();
+  const stream = fssync.createWriteStream(destinationPath);
+  let received = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.length;
+      stream.write(Buffer.from(value));
+      const ratio = total > 0 ? received / total : 0;
+      const progress = 10 + Math.round(ratio * 45);
+      const label = total > 0 ? `${Math.min(100, Math.round(ratio * 100))}%` : `${Math.round(received / 1024)} KB`;
+      setUpdateInstallState({
+        stage: "downloading",
+        progress,
+        message: `Descargando: ${label}`,
+      });
+    }
+  } finally {
+    await new Promise((resolve, reject) => {
+      stream.end((error) => (error ? reject(error) : resolve()));
+    });
+  }
+}
+
+async function downloadAndApplyUpdate() {
+  if (updateInstallState.running) {
+    throw new Error("Ya hay una actualización en curso.");
+  }
+
+  setUpdateInstallState({
+    running: true,
+    done: false,
+    ok: true,
+    stage: "checking",
+    progress: 2,
+    message: "Buscando actualización...",
+    error: "",
+  });
+
+  const update = await checkForUpdates(true);
+  if (!update.hasUpdate || !update.downloadUrl) {
+    setUpdateInstallState({
+      running: false,
+      done: true,
+      ok: true,
+      stage: "idle",
+      progress: 100,
+      message: "No hay una actualización nueva disponible.",
+      error: "",
+    });
+    return;
+  }
+
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rgmm-update-"));
+  const zipPath = path.join(tmpRoot, "update.zip");
+  const extractDir = path.join(tmpRoot, "extract");
+
+  try {
+    await downloadFileWithProgress(update.downloadUrl, zipPath);
+    setUpdateInstallState({
+      stage: "extracting",
+      progress: 60,
+      message: "Descomprimiendo actualización...",
+    });
+    await fs.mkdir(extractDir, { recursive: true });
+    await extractZipToDirectory(zipPath, extractDir);
+    const extractedRoot = await findExtractedRepoRoot(extractDir);
+    await applyExtractedUpdate(extractedRoot);
+    updateCheckCache = {
+      expiresAt: Date.now() + UPDATE_CHECK_TTL_MS,
+      value: {
+        ...update,
+        checked: true,
+        hasUpdate: false,
+        currentVersion: update.latestVersion,
+      },
+    };
+    setUpdateInstallState({
+      running: false,
+      done: true,
+      ok: true,
+      stage: "completed",
+      progress: 100,
+      message: "Actualización completada. Reinicia RGMM para cargar la nueva versión.",
+      error: "",
+    });
+  } catch (error) {
+    setUpdateInstallState({
+      running: false,
+      done: true,
+      ok: false,
+      stage: "error",
+      progress: 100,
+      message: "",
+      error: error.message || String(error),
+    });
+    throw error;
+  } finally {
+    await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function basePathByStateAndType(isActive, type) {
@@ -2274,6 +2441,19 @@ async function handleApi(req, res, pathname) {
     const force = req.url.includes("force=1");
     const update = await checkForUpdates(force);
     sendJson(res, 200, update);
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/update-status") {
+    sendJson(res, 200, { ok: true, status: getUpdateInstallState() });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/update-download") {
+    if (!updateInstallState.running) {
+      downloadAndApplyUpdate().catch(() => {});
+    }
+    sendJson(res, 200, { ok: true, status: getUpdateInstallState() });
     return true;
   }
 
