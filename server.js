@@ -85,6 +85,10 @@ function browserLikeHeaders() {
 
 function openBrowser(url) {
   if (process.env.RGMM_ELECTRON === "1") return;
+  openBrowserExternal(url);
+}
+
+function openBrowserExternal(url) {
   let child;
   if (process.platform === "win32") {
     child = spawn("cmd.exe", ["/c", "start", "", url], {
@@ -2494,7 +2498,7 @@ async function handleApi(req, res, pathname) {
       if (!["http:", "https:"].includes(parsed.protocol)) {
         throw new Error("Solo se permiten URLs http/https.");
       }
-      openBrowser(parsed.toString());
+      openBrowserExternal(parsed.toString());
       sendJson(res, 200, { ok: true });
     } catch (error) {
       sendJson(res, 200, { ok: false, error: error.message || "No se pudo abrir la URL." });
