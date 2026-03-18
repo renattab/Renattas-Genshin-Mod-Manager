@@ -26,7 +26,7 @@ function startServer() {
   const serverPath = path.join(__dirname, "server.js");
   serverProcess = spawn(process.execPath, [serverPath], {
     env: { ...process.env, RGMM_ELECTRON: "1", ELECTRON_RUN_AS_NODE: "1" },
-    stdio: "inherit",
+    stdio: "ignore",
     windowsHide: true,
   });
 
@@ -100,6 +100,13 @@ function stopServer() {
       // ignore
     }
   }
+  if (process.platform !== "win32") {
+    try {
+      serverProcess.kill("SIGKILL");
+    } catch {
+      // ignore
+    }
+  }
   serverProcess = null;
 }
 
@@ -146,6 +153,7 @@ process.on("uncaughtException", (err) => {
 });
 
 app.on("before-quit", () => {
+  allowWindowClose = true;
   isQuitting = true;
   stopServer();
 });
@@ -154,4 +162,8 @@ app.on("window-all-closed", () => {
   if (!isQuitting) {
     app.quit();
   }
+});
+
+app.on("quit", () => {
+  stopServer();
 });
