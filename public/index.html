@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JGMM</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <header class="header">
+        <h1>JGMM</h1>
+        <p>Joaquin's Genshin Mod Manager, porque yo lo valgo</p>
+      </header>
+
+      <section class="launch-bar">
+        <button id="launch3dgimi" class="toggle-btn activate">3DGIMI</button>
+        <button id="launchGenshin" class="toggle-btn deactivate">Genshin Impact</button>
+        <button id="openGenshinModsWeb" class="toggle-btn web">Gamebanana</button>
+        <button id="openSettingsModal" class="toggle-btn settings">Ajustes</button>
+        <button id="openMigotoFolder" class="toggle-btn settings">Abrir carpeta</button>
+        <button id="exitApp" class="toggle-btn deactivate">Salir</button>
+      </section>
+      <section id="activeConflictBanner" class="conflict-banner" hidden></section>
+
+      <section class="toolbar">
+        <input id="searchInput" type="search" placeholder="Buscar por nombre, carpeta o personaje..." />
+        <div class="tabs">
+          <button class="tab" data-filter="all">Todos</button>
+          <button class="tab" data-filter="general">Generales</button>
+          <button class="tab active" data-filter="character">Personajes</button>
+          <button class="tab" data-filter="active">Activos</button>
+          <button class="tab" data-filter="inactive">Inactivos</button>
+        </div>
+      </section>
+
+      <section class="install-panel">
+        <div id="dropZone" class="drop-zone">
+          <p><strong>Instalar mod de personaje</strong></p>
+          <p>Arrastra aquí un comprimido (.zip/.rar/.7z/.tar/.tar.gz/.tgz) o pulsa para seleccionarlo.</p>
+          <input id="zipInput" type="file" accept=".zip,.rar,.7z,.tar,.gz,.tgz,.tar.gz" />
+        </div>
+        <button id="openImportModal" class="secondary-btn import-open-btn">Importar desde enlace</button>
+      </section>
+
+      <section id="summary" class="summary"></section>
+      <section id="list" class="mod-list"></section>
+    </main>
+
+    <dialog id="mminfoModal" class="mminfo-modal">
+      <form id="mminfoForm" class="mminfo-form" method="dialog">
+        <h3>Editar mminfo</h3>
+        <button id="openInfoImportModal" type="button" class="secondary-btn">Importar info desde enlace</button>
+        <label>
+          Titulo del mod
+          <input id="mminfoTitle" name="title" type="text" required />
+        </label>
+        <label>
+          Personaje
+          <input id="mminfoCharacter" name="character" type="text" required />
+        </label>
+        <label>
+          Descripcion
+          <textarea id="mminfoDescription" name="description" rows="4"></textarea>
+        </label>
+        <label>
+          Imagen del mod
+          <input id="mminfoImage" name="image" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp" />
+        </label>
+        <p id="mminfoImageInfo" class="meta"></p>
+        <div class="modal-actions">
+          <button id="mminfoCancel" type="button" class="secondary-btn">Cancelar</button>
+          <button type="submit" class="toggle-btn activate">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="infoImportModal" class="mminfo-modal">
+      <form id="infoImportForm" class="mminfo-form" method="dialog">
+        <h3>Importar Info Desde Enlace</h3>
+        <label>
+          URL del mod
+          <input id="infoImportUrl" type="url" placeholder="https://..." required />
+        </label>
+        <div class="modal-actions">
+          <button id="infoImportCancel" type="button" class="secondary-btn">Cancelar</button>
+          <button id="infoImportAnalyze" type="button" class="toggle-btn activate">Analizar</button>
+        </div>
+
+        <section id="infoImportResult" class="import-result" hidden>
+          <label>
+            Título detectado
+            <input id="infoImportTitle" type="text" />
+          </label>
+          <label>
+            Descripción detectada
+            <textarea id="infoImportDescription" rows="6"></textarea>
+          </label>
+          <p class="meta">Imagen de galería (elige una):</p>
+          <div id="infoImportGallery" class="import-gallery"></div>
+          <div class="modal-actions">
+            <button id="infoImportClose" type="button" class="secondary-btn">Cancelar</button>
+            <button id="infoImportApply" type="button" class="toggle-btn activate">Aplicar al mminfo</button>
+          </div>
+        </section>
+      </form>
+    </dialog>
+
+    <dialog id="fixPickerModal" class="mminfo-modal">
+      <form id="fixPickerForm" class="mminfo-form" method="dialog">
+        <h3>Seleccionar Fix</h3>
+        <p id="fixPickerTarget" class="meta"></p>
+        <div id="fixPickerInfo" class="fix-info" hidden></div>
+        <div id="fixPickerList" class="import-versions"></div>
+        <div class="modal-actions">
+          <button id="fixPickerCancel" type="button" class="secondary-btn">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settingsModal" class="mminfo-modal">
+      <form id="settingsForm" class="mminfo-form" method="dialog">
+        <h3>Ajustes</h3>
+        <label>
+          Ruta de 3DGIMI (.exe/.bat/.cmd)
+          <input id="settings3dgimiPath" type="text" placeholder="C:\\ruta\\a\\3DGIMI.exe" />
+        </label>
+        <label>
+          Ruta de Genshin Impact (.exe/.bat/.cmd)
+          <input id="settingsGenshinPath" type="text" placeholder="C:\\ruta\\a\\GenshinImpact.exe" />
+        </label>
+        <label>
+          Nombres de personajes (uno por línea)
+          <textarea id="settingsCharacterNames" rows="10" placeholder="Hu Tao/HuTao/Hu-Tao&#10;Rosaria&#10;Varka"></textarea>
+        </label>
+        <label class="checkbox-row">
+          <input id="settingsHideEmptyCharacters" type="checkbox" />
+          Esconder personajes sin mods
+        </label>
+        <button id="openThemeFromSettings" type="button" class="secondary-btn">Tema y colores</button>
+        <div class="modal-actions">
+          <button id="settingsCancel" type="button" class="secondary-btn">Cancelar</button>
+          <button type="submit" class="toggle-btn activate">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="themeModal" class="mminfo-modal">
+      <form id="themeForm" class="mminfo-form" method="dialog">
+        <h3>Tema y Colores</h3>
+        <fieldset class="color-settings">
+          <legend>Colores</legend>
+          <label>
+            Color principal de la app
+            <input id="settingsThemePrimary" type="color" />
+          </label>
+          <label>
+            Botón Desinstalar
+            <input id="settingsThemeUninstall" type="color" />
+          </label>
+          <label>
+            Botón Desactivar
+            <input id="settingsThemeDeactivate" type="color" />
+          </label>
+          <label>
+            Banner/Conflicto
+            <input id="settingsThemeConflict" type="color" />
+          </label>
+          <label>
+            Botón 3DGIMI
+            <input id="settingsThemeBtnGimi" type="color" />
+          </label>
+          <label>
+            Botón Genshin
+            <input id="settingsThemeBtnGenshin" type="color" />
+          </label>
+          <label>
+            Botón Gamebanana
+            <input id="settingsThemeBtnGamebanana" type="color" />
+          </label>
+          <label>
+            Botón Ajustes
+            <input id="settingsThemeBtnSettings" type="color" />
+          </label>
+          <label>
+            Botón Abrir carpeta
+            <input id="settingsThemeBtnOpenFolder" type="color" />
+          </label>
+          <label>
+            Botón Salir
+            <input id="settingsThemeBtnExit" type="color" />
+          </label>
+        </fieldset>
+        <div class="modal-actions">
+          <button id="themeCancel" type="button" class="secondary-btn">Cancelar</button>
+          <button type="submit" class="toggle-btn activate">Guardar tema</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="importModal" class="mminfo-modal">
+      <form id="importForm" class="mminfo-form" method="dialog">
+        <h3>Importar desde enlace</h3>
+        <label>
+          URL de la página del mod
+          <input id="importUrl" type="url" placeholder="https://..." required />
+        </label>
+        <div class="modal-actions">
+          <button id="importCancel" type="button" class="secondary-btn">Cancelar</button>
+          <button id="importAnalyze" type="button" class="toggle-btn activate">Analizar</button>
+        </div>
+
+        <section id="importResult" class="import-result" hidden>
+          <label>
+            Título del mod
+            <input id="importTitle" type="text" />
+          </label>
+          <label>
+            Personaje
+            <input id="importCharacter" type="text" placeholder="Opcional" />
+          </label>
+          <label>
+            Descripción
+            <textarea id="importDescription" rows="4"></textarea>
+          </label>
+
+          <p class="meta">Miniatura del mod (elige una):</p>
+          <div id="importGallery" class="import-gallery"></div>
+
+          <p class="meta">Versiones disponibles:</p>
+          <div id="importVersions" class="import-versions"></div>
+
+          <details class="debug-box">
+            <summary>Debug análisis</summary>
+            <textarea id="importDebugOutput" rows="10" readonly></textarea>
+          </details>
+        </section>
+      </form>
+    </dialog>
+
+    <template id="modCardTemplate">
+      <article class="mod-card">
+        <div class="card-top">
+          <div>
+            <h2 class="mod-name"></h2>
+            <p class="mod-character"></p>
+          </div>
+          <div class="badges"></div>
+        </div>
+        <img class="mod-image" alt="Preview del mod" />
+        <p class="folder-name"></p>
+        <p class="meta"></p>
+        <p class="description"></p>
+        <div class="description-full"></div>
+        <button class="secondary-btn read-more-btn">Leer más</button>
+        <div class="card-actions">
+          <div class="action-row">
+            <button class="secondary-btn mminfo-btn">Editar mminfo</button>
+            <button class="secondary-btn fix-btn">Aplicar fix</button>
+          </div>
+          <button class="secondary-btn uninstall-btn">Desinstalar</button>
+          <button class="toggle-btn"></button>
+        </div>
+      </article>
+    </template>
+
+    <aside id="characterDock" class="character-dock">
+      <h3>Personajes</h3>
+      <div id="characterDockList" class="character-dock-list"></div>
+    </aside>
+    <script src="./app.js"></script>
+  </body>
+</html>

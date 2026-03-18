@@ -1,0 +1,13 @@
+{
+  "name": "genshin-super-mod-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mod manager local para 3DMigoto (Genshin Impact)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.2.0"
+  }
+}

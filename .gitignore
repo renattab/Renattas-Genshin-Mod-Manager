@@ -1,0 +1,14 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# 3dmigoto content
+3dmigoto/Disable/
+
+# Ignore all Mods content except Personajes fixes
+3dmigoto/Mods/*
+!3dmigoto/Mods/Personajes/
+3dmigoto/Mods/Personajes/*
+!3dmigoto/Mods/Personajes/**/*.bat
+!3dmigoto/Mods/Personajes/**/*.exe
+!3dmigoto/Mods/Personajes/**/*.cmd

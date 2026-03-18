@@ -1,0 +1,171 @@
+JGMM - GUIA RAPIDA
+==================
+
+1) QUE ES
+---------
+JGMM (Joaquin's Genshin Mod Manager) es un gestor local para mods de Genshin con 3DMigoto.
+Permite activar/desactivar, instalar, desinstalar, editar metadata, aplicar fixes e importar mods desde enlace.
+
+
+2) ESTRUCTURA QUE USA
+---------------------
+- Raiz esperada: carpeta "3dmigoto" dentro del proyecto.
+- Mods activos: "3dmigoto/Mods"
+- Mods inactivos: "3dmigoto/Disable"
+- Mods de personaje:
+  - Activos: "3dmigoto/Mods/Personajes"
+  - Inactivos: "3dmigoto/Disable/Personajes"
+- Carpetas ignoradas en generales: "BufferValues" y "TexFx-main"
+
+
+3) INTERFAZ PRINCIPAL
+---------------------
+- Barra superior:
+  - 3DGIMI: abre el ejecutable configurado en Ajustes.
+  - Genshin Impact: abre el ejecutable configurado en Ajustes.
+  - Gamebanana: abre https://gamebanana.com/mods/cats/18140
+  - Ajustes: rutas + lista de personajes.
+- Barra de busqueda y pestañas:
+  - Filtros: Todos, Generales, Personajes, Activos, Inactivos.
+- Zona de instalacion:
+  - Drag & drop o selector para instalar comprimidos de mods de personaje.
+- Lista de mods:
+  - Tarjetas con imagen, estado, metadata, acciones y descripcion.
+
+
+4) ACTIVAR / DESACTIVAR MODS
+----------------------------
+- Boton Activar/Desactivar mueve carpetas entre Mods y Disable.
+- No modifica contenido del mod, solo su ubicacion.
+
+
+5) ORDEN Y BUSQUEDA
+-------------------
+- Orden alfabetico por nombre de personaje (A-Z).
+- En "Todos", los generales quedan al final.
+- Al hacer click en la imagen de una tarjeta:
+  - Si la busqueda esta vacia: filtra por nombre de carpeta de ese mod.
+  - Si hay texto en la busqueda: limpia la busqueda.
+
+
+6) METADATA (MMINFO)
+--------------------
+- Edicion por modal en "Editar mminfo" (mods de personaje).
+- Campos:
+  - Titulo
+  - Personaje
+  - Descripcion (HTML permitido)
+  - Imagen
+- Guardado en mminfo.json dentro de la carpeta del mod.
+- Soporte de lectura:
+  - mminfo.json
+  - mminfo.txt (legacy)
+
+
+7) IMPORTAR INFO DESDE ENLACE (SIN DESCARGAR MOD)
+-------------------------------------------------
+- Desde "Editar mminfo" -> "Importar info desde enlace".
+- Obtiene:
+  - Titulo
+  - Descripcion
+  - Imagenes de galeria para elegir miniatura
+- Aplica la info al formulario y luego se guarda normalmente.
+
+
+8) IMPORTAR MOD DESDE ENLACE (DESCARGA + INSTALACION)
+------------------------------------------------------
+- Boton "Importar desde enlace" en la pantalla principal.
+- Analiza pagina (ej. GameBanana), muestra:
+  - Titulo
+  - Personaje
+  - Descripcion
+  - Miniaturas
+  - Versiones descargables
+- Al elegir una version:
+  - Descarga el archivo
+  - Instala como mod de personaje
+  - Crea/actualiza mminfo
+
+
+9) LIMPIEZA DE TITULOS Y DETECCION DE PERSONAJE
+-----------------------------------------------
+- En Ajustes puedes poner personajes por linea con alias:
+  - Ejemplo: Hu Tao/HuTao/Hu-Tao
+  - El primer nombre es el canonico que se guarda.
+- Al importar desde enlace:
+  - Detecta personaje por alias en el titulo.
+  - Limpia titulo (corchetes, llaves, parentesis, ruido, etc).
+  - Elimina texto tipo "A Mod for Genshin Impact".
+
+
+10) INSTALAR COMPRIMIDOS (ARRASTRAR / SELECCIONAR)
+--------------------------------------------------
+- Formatos soportados:
+  - .zip, .rar, .7z, .tar, .gz, .tgz, .tar.gz
+- Reglas de instalacion:
+  - Si en raiz hay .dds/.ib/.buf -> crea carpeta con nombre del comprimido y copia todo.
+  - Si hay una sola carpeta principal -> copia esa carpeta como mod.
+- Evita colisiones de nombre contra activos e inactivos.
+
+
+11) DESINSTALAR MOD
+-------------------
+- Boton "Desinstalar" en tarjeta.
+- Pide confirmacion.
+- Borra el mod del disco (activo e inactivo si existe).
+
+
+12) FIXES DE PERSONAJE
+----------------------
+- Boton "Aplicar fix (.exe/.bat)" en tarjeta de personaje.
+- Muestra lista de fixes detectados (.exe/.bat/.cmd).
+- Al elegir uno:
+  - Copia el fix a la carpeta del mod
+  - Lo ejecuta
+- Diseñado para fixes de personajes con problemas visuales.
+
+
+13) AJUSTES
+-----------
+- Ruta 3DGIMI
+- Ruta Genshin Impact
+- Nombres de personajes y aliases (una linea por personaje)
+- Se guarda en settings.json
+
+
+14) API LOCAL DISPONIBLE
+------------------------
+- GET  /api/mods
+- POST /api/mods/toggle
+- POST /api/mods/mminfo
+- POST /api/mods/install-character
+- POST /api/mods/uninstall
+- GET  /api/mods/fixes
+- POST /api/mods/apply-fix-library
+- POST /api/web/page-data
+- POST /api/web/import-version
+- POST /api/web/quick-import  (pensado para Tampermonkey)
+- GET/POST /api/settings
+- POST /api/launch
+
+
+15) TAMPERMONKEY (OPCIONAL)
+---------------------------
+- Script incluido: tampermonkey-gsmm-import.user.js
+- Inserta boton en GameBanana para mandar el mod al manager.
+- Soporta seleccion de version cuando hay multiples archivos.
+
+
+16) ARRANQUE RAPIDO
+-------------------
+1. Instalar dependencias: npm install
+2. Iniciar app: npm start
+3. Abrir: http://localhost:3210
+4. Configurar rutas en Ajustes
+
+
+17) NOTAS IMPORTANTES
+---------------------
+- El manager trabaja en local, no en la nube.
+- Si un lanzamiento falla, revisa ruta en Ajustes y permisos del ejecutable.
+- Algunos sitios bloquean iframes: no afecta a la importacion por URL.
