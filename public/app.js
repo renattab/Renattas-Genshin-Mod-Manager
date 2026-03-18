@@ -193,6 +193,20 @@ function normalizeTextKey(value) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function parseSearchQuery(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return { mode: "all", term: "" };
+  if (trimmed.startsWith("!")) {
+    return { mode: "character", term: trimmed.slice(1).trim() };
+  }
+  return { mode: "all", term: trimmed };
+}
+
+function formatCharacterSearch(name) {
+  const clean = String(name || "").trim();
+  return clean ? `!${clean}` : "!";
+}
+
 function normalizeHexColor(value, fallback) {
   const text = String(value || "").trim();
   if (/^#[0-9a-f]{6}$/i.test(text)) return text.toLowerCase();
@@ -623,8 +637,9 @@ function renderCharacterDock() {
       row.style.gridTemplateColumns = "30px 1fr auto";
     }
     row.addEventListener("click", () => {
-      state.search = name;
-      searchInput.value = name;
+      const searchValue = formatCharacterSearch(name);
+      state.search = searchValue;
+      searchInput.value = searchValue;
       setActiveFilter("character");
       render();
     });
@@ -788,7 +803,9 @@ async function startUpdateDownload() {
 }
 
 function getFilteredMods() {
-  const query = state.search.trim().toLowerCase();
+  const { mode, term } = parseSearchQuery(state.search);
+  const query = term.toLowerCase();
+  const characterQueryKey = mode === "character" ? normalizeTextKey(term) : "";
   const filtered = state.mods.filter((mod) => {
     if (state.filter === "general" && mod.type !== "general") return false;
     if (state.filter === "character" && mod.type !== "character") return false;
@@ -796,6 +813,11 @@ function getFilteredMods() {
     if (state.filter === "inactive" && mod.isActive) return false;
 
     if (!query) return true;
+    if (mode === "character") {
+      if (mod.type !== "character") return false;
+      const characterKey = normalizeTextKey(mod.character || "");
+      return Boolean(characterKey && characterKey.includes(characterQueryKey));
+    }
     const text = [mod.title, mod.folderName, mod.character || "", mod.description || ""].join(" ").toLowerCase();
     return text.includes(query);
   });
@@ -1433,7 +1455,11 @@ launchGenshin.addEventListener("click", async () => {
 });
 
 openGenshinModsWeb.addEventListener("click", () => {
-  window.open("https://gamebanana.com/mods/cats/18140", "_blank", "noopener,noreferrer");
+  fetch("/api/open-external", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: "https://gamebanana.com/mods/cats/18140" }),
+  }).catch(() => {});
 });
 
 if (updateBannerAction) {

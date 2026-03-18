@@ -2485,6 +2485,23 @@ async function handleApi(req, res, pathname) {
     return true;
   }
 
+  if (req.method === "POST" && pathname === "/api/open-external") {
+    try {
+      const body = await readJsonBody(req);
+      const raw = typeof body?.url === "string" ? body.url.trim() : "";
+      if (!raw) throw new Error("URL inválida.");
+      const parsed = new URL(raw);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("Solo se permiten URLs http/https.");
+      }
+      openBrowser(parsed.toString());
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 200, { ok: false, error: error.message || "No se pudo abrir la URL." });
+    }
+    return true;
+  }
+
   if (req.method === "POST" && pathname === "/api/paths/3dmigoto/validate") {
     const body = await readJsonBody(req);
     const baseDir = normalizeMigotoBase(body?.baseDir || "");
