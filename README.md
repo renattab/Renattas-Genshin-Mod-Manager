@@ -43,6 +43,20 @@ image: 0preview.png
 También puedes editar este `mminfo` desde el botón `Editar mminfo` en la UI.
 Se abre una ventana de formulario y la imagen se elige con selector de archivos de Windows.
 
+## Lista de personajes
+
+La columna derecha usa la lista de `characterNames`.
+
+- Si existe `characterNames.txt`, esa lista tiene prioridad.
+- Si no existe, RGMM usa `settings.json > characterNames`.
+
+## Banner de actualización
+
+Al arrancar, RGMM intenta comparar `version.txt` local con el `version.txt` del repo en GitHub.
+
+- Si son distintos, muestra un banner arriba con enlace para descargar el source code en `.zip`.
+- Si no hay internet o GitHub falla, no muestra nada y la app sigue funcionando normal.
+
 ## Fixes de personaje (.exe/.bat/.cmd)
 
 Cada tarjeta de personaje incluye `Aplicar fix (.exe/.bat)`.

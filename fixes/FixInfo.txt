@@ -1,0 +1,8 @@
+[Description]
+Asegúrate de que Opciones > Gráficos > Modelo dinámico esté desactivado
+
+[Names]
+57ReleaseVersion.exe = Release - Arregla el modelo 3D roto
+orfixapplier_ver_4_2_e863a.exe = ORFix Applier - Aplica ORFix
+blue_circles_fix.bat = Blue Circles Fix - Arregla círculos azules debajo de los ojos
+facefixv080.exe = Face Fix - Arregla el modelo 3D roto DE LA CARA SOLAMENTE

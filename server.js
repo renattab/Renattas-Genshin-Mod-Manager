@@ -30,6 +30,11 @@ const MOD_FILE_EXTENSIONS = new Set([".dds", ".ib", ".buf"]);
 const ALLOWED_ARCHIVE_EXTENSIONS = new Set([".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".tar.gz"]);
 const MAX_JSON_BODY_BYTES = 350 * 1024 * 1024;
 const SETTINGS_PATH = path.join(ROOT_DIR, "settings.json");
+const CHARACTER_NAMES_PATH = path.join(ROOT_DIR, "characterNames.txt");
+const VERSION_PATH = path.join(ROOT_DIR, "version.txt");
+const UPDATE_REPO_URL = "https://github.com/renattab/Renattas-Genshin-Mod-Manager";
+const UPDATE_BRANCHES = ["main", "master"];
+const UPDATE_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_SETTINGS = {
   paths: {
     gimi: "",
@@ -50,6 +55,10 @@ const DEFAULT_SETTINGS = {
     btnOpenFolder: "#6a4cc2",
     btnExit: "#4a1f28",
   },
+};
+let updateCheckCache = {
+  expiresAt: 0,
+  value: null,
 };
 
 function browserLikeHeaders() {
@@ -270,7 +279,6 @@ function sanitizeSettings(input) {
       gimi: normalizeWhitespace(rawPaths.gimi || ""),
       genshin: normalizeWhitespace(rawPaths.genshin || ""),
     },
-    characterNames: [],
     hideEmptyCharacters: Boolean(raw.hideEmptyCharacters),
     disableAutoDeactivate: Boolean(raw.disableAutoDeactivate),
     theme: {
@@ -299,8 +307,13 @@ function sanitizeSettings(input) {
   settings.theme.btnGamebanana = normalizeHex(rawTheme.btnGamebanana, settings.theme.btnGamebanana);
   settings.theme.btnSettings = normalizeHex(rawTheme.btnSettings, settings.theme.btnSettings);
 
+  return settings;
+}
+
+function normalizeCharacterNames(rawList) {
   const seen = new Set();
-  const namesRaw = Array.isArray(raw.characterNames) ? raw.characterNames : [];
+  const output = [];
+  const namesRaw = Array.isArray(rawList) ? rawList : [];
   for (const item of namesRaw) {
     const clean = normalizeWhitespace(item);
     if (!clean) continue;
@@ -309,11 +322,10 @@ function sanitizeSettings(input) {
     const key = normalizePersonNameForMatch(canonical);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    settings.characterNames.push(clean);
-    if (settings.characterNames.length >= 400) break;
+    output.push(clean);
+    if (output.length >= 400) break;
   }
-
-  return settings;
+  return output;
 }
 
 function parseCharacterRuleLine(line) {
@@ -457,9 +469,9 @@ async function readSettings() {
     const fallback = {
       ...DEFAULT_SETTINGS,
       paths: { ...DEFAULT_SETTINGS.paths },
-      characterNames: [],
       theme: { ...DEFAULT_SETTINGS.theme },
     };
+    fallback.characterNames = await readCharacterNames();
     setMigotoBaseDir(MIGOTO_DIR);
     return fallback;
   }
@@ -467,6 +479,10 @@ async function readSettings() {
     const raw = await fs.readFile(SETTINGS_PATH, "utf-8");
     const parsed = JSON.parse(raw);
     const safe = sanitizeSettings(parsed);
+    const characterNames = await readCharacterNames();
+    safe.characterNames = characterNames.length
+      ? characterNames
+      : normalizeCharacterNames(parsed?.characterNames);
     const configured = normalizeMigotoBase(safe.paths.gimi);
     setMigotoBaseDir(configured || MIGOTO_DIR);
     return safe;
@@ -474,9 +490,9 @@ async function readSettings() {
     const fallback = {
       ...DEFAULT_SETTINGS,
       paths: { ...DEFAULT_SETTINGS.paths },
-      characterNames: [],
       theme: { ...DEFAULT_SETTINGS.theme },
     };
+    fallback.characterNames = await readCharacterNames();
     setMigotoBaseDir(MIGOTO_DIR);
     return fallback;
   }
@@ -485,9 +501,105 @@ async function readSettings() {
 async function writeSettings(input) {
   const safe = sanitizeSettings(input);
   await fs.writeFile(SETTINGS_PATH, `${JSON.stringify(safe, null, 2)}\n`, "utf-8");
+  const names = normalizeCharacterNames(input?.characterNames);
+  await writeCharacterNames(names);
+  safe.characterNames = names;
   const configured = normalizeMigotoBase(safe.paths.gimi);
   setMigotoBaseDir(configured || MIGOTO_DIR);
   return safe;
+}
+
+async function readCharacterNames() {
+  if (!(await pathExists(CHARACTER_NAMES_PATH))) return [];
+  try {
+    const raw = await fs.readFile(CHARACTER_NAMES_PATH, "utf-8");
+    return normalizeCharacterNames(
+      raw
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function writeCharacterNames(names) {
+  const content = Array.isArray(names) ? names.join("\n") : "";
+  await fs.writeFile(CHARACTER_NAMES_PATH, `${content}\n`, "utf-8");
+}
+
+async function readLocalVersion() {
+  if (!(await pathExists(VERSION_PATH))) return "";
+  try {
+    return String(await fs.readFile(VERSION_PATH, "utf-8")).trim();
+  } catch {
+    return "";
+  }
+}
+
+function buildRemoteVersionUrl(branch) {
+  return `https://raw.githubusercontent.com/renattab/Renattas-Genshin-Mod-Manager/${branch}/version.txt`;
+}
+
+function buildSourceDownloadUrl(branch) {
+  return `${UPDATE_REPO_URL}/archive/refs/heads/${branch}.zip`;
+}
+
+async function fetchRemoteVersionInfo() {
+  for (const branch of UPDATE_BRANCHES) {
+    try {
+      const response = await fetch(buildRemoteVersionUrl(branch), {
+        headers: { ...browserLikeHeaders(), Accept: "text/plain,*/*" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) continue;
+      const version = String(await response.text()).trim();
+      if (!version) continue;
+      return {
+        ok: true,
+        branch,
+        latestVersion: version,
+        versionUrl: buildRemoteVersionUrl(branch),
+        downloadUrl: buildSourceDownloadUrl(branch),
+      };
+    } catch {
+      // ignore and try next branch
+    }
+  }
+  return {
+    ok: false,
+    branch: "",
+    latestVersion: "",
+    versionUrl: "",
+    downloadUrl: "",
+  };
+}
+
+async function checkForUpdates(force = false) {
+  if (!force && updateCheckCache.value && updateCheckCache.expiresAt > Date.now()) {
+    return updateCheckCache.value;
+  }
+
+  const currentVersion = await readLocalVersion();
+  const remote = await fetchRemoteVersionInfo();
+  const result = {
+    ok: true,
+    checked: remote.ok,
+    hasUpdate: Boolean(remote.ok && currentVersion && remote.latestVersion && remote.latestVersion !== currentVersion),
+    currentVersion,
+    latestVersion: remote.latestVersion,
+    branch: remote.branch,
+    repoUrl: UPDATE_REPO_URL,
+    versionUrl: remote.versionUrl,
+    downloadUrl: remote.downloadUrl,
+  };
+
+  updateCheckCache = {
+    expiresAt: Date.now() + UPDATE_CHECK_TTL_MS,
+    value: result,
+  };
+  return result;
 }
 
 function basePathByStateAndType(isActive, type) {
@@ -937,38 +1049,81 @@ function sanitizeFixFilename(fileName) {
 }
 
 function getFixLibraryRoots() {
-  const roots = [path.join(MODS_DIR, CHARACTERS_SUBDIR), path.join(MIGOTO_DIR, CHARACTERS_SUBDIR)];
-  const unique = [];
-  const seen = new Set();
-  for (const root of roots) {
-    const key = path.normalize(root).toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(root);
-  }
-  return unique;
+  const roots = [path.join(ROOT_DIR, "fixes")];
+  return roots;
 }
 
 function buildFixId(fullPath) {
   return Buffer.from(fullPath, "utf-8").toString("base64url");
 }
 
-async function readFixInfoText() {
+function parseFixInfo(content) {
+  const nameMap = new Map();
+  const order = [];
+  const orderIndex = new Map();
+  const descriptionLines = [];
+  let section = "";
+  const lines = String(content || "").split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      if (section === "description") descriptionLines.push("");
+      continue;
+    }
+    if (line.startsWith("#") || line.startsWith(";")) continue;
+    const sectionMatch = line.match(/^\[([^\]]+)\]$/);
+    if (sectionMatch) {
+      section = sectionMatch[1].trim().toLowerCase();
+      continue;
+    }
+    if (section === "description") {
+      descriptionLines.push(rawLine);
+      continue;
+    }
+    if (section === "names") {
+      const splitter = line.includes("=") ? "=" : line.includes(":") ? ":" : "";
+      if (!splitter) continue;
+      const [left, ...rest] = line.split(splitter);
+      const key = normalizeWhitespace(left);
+      const value = normalizeWhitespace(rest.join(splitter));
+      if (!key || !value) continue;
+      const lower = key.toLowerCase();
+      nameMap.set(lower, value);
+      if (!orderIndex.has(lower)) {
+        orderIndex.set(lower, order.length);
+        order.push(lower);
+      }
+    }
+  }
+  const description = descriptionLines.join("\n").trim();
+  return { description, nameMap, orderIndex };
+}
+
+async function readFixInfoConfig() {
   for (const root of getFixLibraryRoots()) {
     const filePath = path.join(root, "FixInfo.txt");
     try {
       const content = await fs.readFile(filePath, "utf-8");
       if (content && content.trim()) {
-        return content.trim();
+        return parseFixInfo(content);
       }
     } catch (error) {
       // ignore missing
     }
   }
+  return { description: "", nameMap: new Map(), orderIndex: new Map() };
+}
+
+function resolveFixDisplayName(fileName, nameMap) {
+  if (!nameMap || !nameMap.size) return "";
+  const key = fileName.toLowerCase();
+  if (nameMap.has(key)) return nameMap.get(key);
+  const base = path.parse(fileName).name.toLowerCase();
+  if (nameMap.has(base)) return nameMap.get(base);
   return "";
 }
 
-async function listFixLibrary() {
+async function listFixLibrary(nameMap, orderIndex) {
   const entries = [];
   for (const root of getFixLibraryRoots()) {
     const rootExists = await pathExists(root);
@@ -979,14 +1134,25 @@ async function listFixLibrary() {
       const ext = path.extname(entry.name).toLowerCase();
       if (!ALLOWED_FIX_EXTENSIONS.has(ext)) continue;
       const fullPath = path.join(root, entry.name);
+      const displayName = resolveFixDisplayName(entry.name, nameMap);
+      const nameKey = entry.name.toLowerCase();
+      const baseKey = path.parse(entry.name).name.toLowerCase();
+      let order = Number.MAX_SAFE_INTEGER;
+      if (orderIndex && orderIndex.has(nameKey)) order = orderIndex.get(nameKey);
+      else if (orderIndex && orderIndex.has(baseKey)) order = orderIndex.get(baseKey);
       entries.push({
         id: buildFixId(fullPath),
         name: entry.name,
+        displayName,
         location: root,
+        order,
       });
     }
   }
-  entries.sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+  entries.sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return a.name.localeCompare(b.name, "es", { sensitivity: "base" });
+  });
   return entries;
 }
 
@@ -2104,6 +2270,13 @@ async function serveModImage(req, res, url) {
 }
 
 async function handleApi(req, res, pathname) {
+  if (req.method === "GET" && pathname === "/api/update-check") {
+    const force = req.url.includes("force=1");
+    const update = await checkForUpdates(force);
+    sendJson(res, 200, update);
+    return true;
+  }
+
   if (req.method === "GET" && pathname === "/api/settings") {
     const settings = await readSettings();
     sendJson(res, 200, { ok: true, settings });
@@ -2236,9 +2409,9 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "GET" && pathname === "/api/mods/fixes") {
-    const fixes = await listFixLibrary();
-    const info = await readFixInfoText();
-    sendJson(res, 200, { ok: true, fixes, info });
+    const { description, nameMap, orderIndex } = await readFixInfoConfig();
+    const fixes = await listFixLibrary(nameMap, orderIndex);
+    sendJson(res, 200, { ok: true, fixes, info: description });
     return true;
   }
 

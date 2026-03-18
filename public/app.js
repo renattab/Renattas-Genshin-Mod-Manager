@@ -3,6 +3,7 @@ const state = {
   filter: "character",
   search: "",
   busyIds: new Set(),
+  update: null,
   settings: {
     paths: { gimi: "", genshin: "" },
     characterNames: [],
@@ -74,6 +75,9 @@ const themeModal = document.getElementById("themeModal");
 const themeForm = document.getElementById("themeForm");
 const themeCancel = document.getElementById("themeCancel");
 const activeConflictBanner = document.getElementById("activeConflictBanner");
+const updateBanner = document.getElementById("updateBanner");
+const updateBannerText = document.getElementById("updateBannerText");
+const updateBannerLink = document.getElementById("updateBannerLink");
 const characterDock = document.getElementById("characterDock");
 const characterDockList = document.getElementById("characterDockList");
 const mminfoModal = document.getElementById("mminfoModal");
@@ -657,6 +661,34 @@ function renderActiveConflictBanner() {
   activeConflictBanner.textContent = `Hay más de un mod activado de: ${conflicts.join(", ")}`;
 }
 
+function renderUpdateBanner() {
+  if (!updateBanner || !updateBannerText || !updateBannerLink) return;
+  const info = state.update;
+  if (!info?.hasUpdate || !info?.downloadUrl) {
+    updateBanner.hidden = true;
+    updateBannerText.textContent = "";
+    updateBannerLink.href = "#";
+    return;
+  }
+
+  updateBanner.hidden = false;
+  updateBannerText.textContent =
+    `Hay una versión nueva en GitHub. Tienes ${info.currentVersion || "sin versión"} y la última es ${info.latestVersion}.`;
+  updateBannerLink.href = info.downloadUrl;
+}
+
+async function loadUpdateInfo() {
+  try {
+    const response = await fetch("/api/update-check");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok !== true) return;
+    state.update = data;
+    renderUpdateBanner();
+  } catch {
+    // ignore update check failures to keep startup offline-friendly
+  }
+}
+
 function getFilteredMods() {
   const query = state.search.trim().toLowerCase();
   const filtered = state.mods.filter((mod) => {
@@ -945,7 +977,7 @@ async function openFixPicker(mod) {
       const row = document.createElement("div");
       row.className = "version-row";
       const label = document.createElement("span");
-      label.textContent = fix.name;
+      label.textContent = fix.displayName || fix.name;
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "secondary-btn";
@@ -1485,3 +1517,4 @@ zipInput.addEventListener("change", () => {
 Promise.all([loadSettings(), loadMods()]).catch((error) => {
   alert(error.message);
 });
+loadUpdateInfo();
