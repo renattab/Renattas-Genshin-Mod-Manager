@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, Menu } = require("electron");
 const { spawn } = require("child_process");
 const http = require("http");
 const path = require("path");
@@ -36,6 +36,7 @@ function startServer() {
 }
 
 function createWindow() {
+  Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -51,6 +52,8 @@ function createWindow() {
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
   });
+
+  mainWindow.setMenuBarVisibility(false);
 
   mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
     if (url === SERVER_URL) {

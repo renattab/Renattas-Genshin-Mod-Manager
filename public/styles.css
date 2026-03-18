@@ -159,7 +159,7 @@ body {
 .launch-bar {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   align-items: center;
 }
@@ -572,6 +572,16 @@ body {
   border-radius: 8px;
   padding: 2px;
   background: #122233;
+}
+
+.inline-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-field input {
+  flex: 1;
 }
 
 .modal-actions {

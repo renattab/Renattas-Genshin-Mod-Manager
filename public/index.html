@@ -17,9 +17,8 @@
         <button id="launch3dgimi" class="toggle-btn activate">3DGIMI</button>
         <button id="launchGenshin" class="toggle-btn deactivate">Genshin Impact</button>
         <button id="openGenshinModsWeb" class="toggle-btn web">Gamebanana</button>
-        <button id="openSettingsModal" class="toggle-btn settings">Ajustes</button>
         <button id="openMigotoFolder" class="toggle-btn settings">Abrir carpeta</button>
-        <button id="exitApp" class="toggle-btn deactivate">Salir</button>
+        <button id="openSettingsModal" class="toggle-btn settings">Ajustes</button>
       </section>
       <section id="activeConflictBanner" class="conflict-banner" hidden></section>
 
@@ -62,6 +61,12 @@
         <label>
           Descripcion
           <textarea id="mminfoDescription" name="description" rows="4"></textarea>
+        </label>
+        <label>
+          Mod padre (opcional)
+          <select id="mminfoParent" name="parent">
+            <option value="">Ninguno</option>
+          </select>
         </label>
         <label>
           Imagen del mod
@@ -122,8 +127,11 @@
       <form id="settingsForm" class="mminfo-form" method="dialog">
         <h3>Ajustes</h3>
         <label>
-          Ruta de 3DGIMI (.exe/.bat/.cmd)
-          <input id="settings3dgimiPath" type="text" placeholder="C:\\ruta\\a\\3DGIMI.exe" />
+          Carpeta de 3dmigoto
+          <div class="inline-field">
+            <input id="settings3dgimiPath" type="text" placeholder="C:\\ruta\\a\\3dmigoto" />
+            <button id="pick3dmigotoFolder" type="button" class="secondary-btn">Elegir</button>
+          </div>
         </label>
         <label>
           Ruta de Genshin Impact (.exe/.bat/.cmd)
@@ -136,6 +144,10 @@
         <label class="checkbox-row">
           <input id="settingsHideEmptyCharacters" type="checkbox" />
           Esconder personajes sin mods
+        </label>
+        <label class="checkbox-row">
+          <input id="settingsDisableAutoDeactivate" type="checkbox" />
+          No autodesactivar mods de un mismo personaje
         </label>
         <button id="openThemeFromSettings" type="button" class="secondary-btn">Tema y colores</button>
         <div class="modal-actions">

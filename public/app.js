@@ -32,7 +32,6 @@ const launchGenshin = document.getElementById("launchGenshin");
 const openGenshinModsWeb = document.getElementById("openGenshinModsWeb");
 const openSettingsModal = document.getElementById("openSettingsModal");
 const openMigotoFolder = document.getElementById("openMigotoFolder");
-const exitApp = document.getElementById("exitApp");
 
 const isElectronHost = new URLSearchParams(window.location.search).has("rgmm");
 if (!isElectronHost) {
@@ -55,9 +54,11 @@ const openThemeFromSettings = document.getElementById("openThemeFromSettings");
 const settingsModal = document.getElementById("settingsModal");
 const settingsForm = document.getElementById("settingsForm");
 const settings3dgimiPath = document.getElementById("settings3dgimiPath");
+const pick3dmigotoFolder = document.getElementById("pick3dmigotoFolder");
 const settingsGenshinPath = document.getElementById("settingsGenshinPath");
 const settingsCharacterNames = document.getElementById("settingsCharacterNames");
 const settingsHideEmptyCharacters = document.getElementById("settingsHideEmptyCharacters");
+const settingsDisableAutoDeactivate = document.getElementById("settingsDisableAutoDeactivate");
 const settingsThemePrimary = document.getElementById("settingsThemePrimary");
 const settingsThemeUninstall = document.getElementById("settingsThemeUninstall");
 const settingsThemeDeactivate = document.getElementById("settingsThemeDeactivate");
@@ -80,6 +81,7 @@ const mminfoForm = document.getElementById("mminfoForm");
 const mminfoTitle = document.getElementById("mminfoTitle");
 const mminfoCharacter = document.getElementById("mminfoCharacter");
 const mminfoDescription = document.getElementById("mminfoDescription");
+const mminfoParent = document.getElementById("mminfoParent");
 const mminfoImage = document.getElementById("mminfoImage");
 const mminfoImageInfo = document.getElementById("mminfoImageInfo");
 const mminfoCancel = document.getElementById("mminfoCancel");
@@ -373,6 +375,7 @@ function fillSettingsForm() {
   settingsGenshinPath.value = state.settings?.paths?.genshin || "";
   settingsCharacterNames.value = (state.settings?.characterNames || []).join("\n");
   settingsHideEmptyCharacters.checked = Boolean(state.settings?.hideEmptyCharacters);
+  settingsDisableAutoDeactivate.checked = Boolean(state.settings?.disableAutoDeactivate);
 }
 
 function fillThemeForm() {
@@ -407,13 +410,18 @@ async function saveSettings() {
     .split(/\r?\n/)
     .map((name) => name.trim())
     .filter(Boolean);
+  const gimiBase = settings3dgimiPath.value.trim();
+  if (gimiBase) {
+    await ensureMigotoStructure(gimiBase);
+  }
   const payload = {
     paths: {
-      gimi: settings3dgimiPath.value.trim(),
+      gimi: gimiBase,
       genshin: settingsGenshinPath.value.trim(),
     },
     characterNames,
     hideEmptyCharacters: settingsHideEmptyCharacters.checked,
+    disableAutoDeactivate: settingsDisableAutoDeactivate.checked,
     theme: {
       primary: settingsThemePrimary.value,
       uninstall: settingsThemeUninstall.value,
@@ -441,6 +449,7 @@ async function saveSettings() {
   fillThemeForm();
   applyTheme();
   renderCharacterDock();
+  await loadMods();
 }
 
 async function saveThemeOnly() {
@@ -448,6 +457,7 @@ async function saveThemeOnly() {
     paths: state.settings?.paths || { gimi: "", genshin: "" },
     characterNames: state.settings?.characterNames || [],
     hideEmptyCharacters: Boolean(state.settings?.hideEmptyCharacters),
+    disableAutoDeactivate: Boolean(state.settings?.disableAutoDeactivate),
     theme: {
       primary: settingsThemePrimary.value,
       uninstall: settingsThemeUninstall.value,
@@ -473,6 +483,36 @@ async function saveThemeOnly() {
   state.settings = data.settings || state.settings;
   fillThemeForm();
   applyTheme();
+}
+
+async function ensureMigotoStructure(baseDir) {
+  const validateResponse = await fetch("/api/paths/3dmigoto/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ baseDir }),
+  });
+  const validateData = await validateResponse.json().catch(() => ({}));
+  if (!validateResponse.ok || validateData?.ok === false) {
+    throw new Error(validateData.error || "No se pudo validar la carpeta de 3dmigoto.");
+  }
+  const missing = Array.isArray(validateData.missing) ? validateData.missing : [];
+  if (!missing.length) return;
+  const shortList = missing.map((item) => item.replace(baseDir, "").replace(/^[\\/]/, "")).join("\n");
+  const confirmCreate = window.confirm(
+    `Este 3DMigoto no está gestionado por RGMM.\n¿Quieres que se creen las carpetas necesarias para ser gestionado?\n\nCarpetas:\n${shortList}`
+  );
+  if (!confirmCreate) {
+    throw new Error("Operación cancelada por el usuario.");
+  }
+  const ensureResponse = await fetch("/api/paths/3dmigoto/ensure", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ baseDir }),
+  });
+  const ensureData = await ensureResponse.json().catch(() => ({}));
+  if (!ensureResponse.ok || ensureData?.ok !== true) {
+    throw new Error(ensureData.error || "No se pudieron crear las carpetas necesarias.");
+  }
 }
 
 async function launchTarget(target) {
@@ -527,14 +567,18 @@ function renderCharacterDock() {
   }
 
   const installedCounts = new Map();
-  const activeCounts = new Map();
+  const activeGroupCounts = new Map();
+  const activeGroups = new Map();
   for (const mod of state.mods) {
     if (mod.type !== "character") continue;
     const key = normalizeTextKey(mod.character);
     if (!key) continue;
     installedCounts.set(key, (installedCounts.get(key) || 0) + 1);
     if (mod.isActive) {
-      activeCounts.set(key, (activeCounts.get(key) || 0) + 1);
+      const groupId = mod.parent || mod.folderName;
+      if (!activeGroups.has(key)) activeGroups.set(key, new Set());
+      activeGroups.get(key).add(groupId);
+      activeGroupCounts.set(key, activeGroups.get(key).size);
     }
   }
 
@@ -544,7 +588,7 @@ function renderCharacterDock() {
     row.type = "button";
     row.className = "character-dock-item";
     const count = installedCounts.get(key) || 0;
-    const hasConflict = (activeCounts.get(key) || 0) > 1;
+    const hasConflict = (activeGroupCounts.get(key) || 0) > 1;
     if (state.settings?.hideEmptyCharacters && count === 0) continue;
     if (hasConflict) row.classList.add("conflict");
 
@@ -594,10 +638,12 @@ function renderActiveConflictBanner() {
     const key = normalizeTextKey(character);
     if (!key || character === "Sin definir") continue;
     if (!displayNameByKey.has(key)) displayNameByKey.set(key, character);
-    map.set(key, (map.get(key) || 0) + 1);
+    const groupId = mod.parent || mod.folderName;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(groupId);
   }
   const conflicts = Array.from(map.entries())
-    .filter(([, count]) => count > 1)
+    .filter(([, groups]) => groups.size > 1)
     .map(([key]) => displayNameByKey.get(key) || key)
     .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base", numeric: true }));
 
@@ -688,9 +734,33 @@ function openMmInfoModal(mod) {
   mminfoTitle.value = mod.title || "";
   mminfoCharacter.value = mod.character === "Sin definir" ? "" : mod.character || "";
   mminfoDescription.value = mod.description || "";
+  fillMmInfoParentOptions(mod);
   mminfoImage.value = "";
   mminfoImageInfo.textContent = mod.image ? `Imagen actual: ${mod.image}` : "Sin imagen actual.";
   openDialog(mminfoModal, true);
+}
+
+function fillMmInfoParentOptions(mod) {
+  if (!mminfoParent) return;
+  mminfoParent.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "Ninguno";
+  mminfoParent.appendChild(empty);
+  const characterKey = normalizeTextKey(mod.character || "");
+  const candidates = state.mods.filter(
+    (item) =>
+      item.type === "character" &&
+      item.folderName !== mod.folderName &&
+      normalizeTextKey(item.character || "") === characterKey
+  );
+  for (const item of candidates) {
+    const opt = document.createElement("option");
+    opt.value = item.folderName;
+    opt.textContent = `${item.title || item.folderName} (${item.folderName})`;
+    mminfoParent.appendChild(opt);
+  }
+  mminfoParent.value = mod.parent || "";
 }
 
 function resetInfoImportModal() {
@@ -792,6 +862,7 @@ async function saveMmInfo() {
         title: mminfoTitle.value.trim(),
         character: mminfoCharacter.value.trim(),
         description: mminfoDescription.value.trim(),
+        parent: mminfoParent ? mminfoParent.value.trim() : "",
         image: editingMod.image || "",
         imageFromUrl: selectedImage ? "" : mminfoImportedImageUrl,
         ...imagePayload,
@@ -1240,6 +1311,23 @@ openSettingsModal.addEventListener("click", () => {
   openDialog(settingsModal, true);
 });
 
+pick3dmigotoFolder.addEventListener("click", async () => {
+  try {
+    const response = await fetch("/api/paths/3dmigoto/pick", { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.ok === false) {
+      if (data?.cancelled) return;
+      throw new Error(data.error || "No se pudo abrir el selector de carpetas.");
+    }
+    const selected = String(data.path || "").trim();
+    if (!selected) return;
+    await ensureMigotoStructure(selected);
+    settings3dgimiPath.value = selected;
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
 openMigotoFolder.addEventListener("click", async () => {
   try {
     const response = await fetch("/api/open-3dmigoto-folder");
@@ -1247,15 +1335,6 @@ openMigotoFolder.addEventListener("click", async () => {
     if (!response.ok || data?.ok !== true) {
       throw new Error(data.error || "No se pudo abrir la carpeta.");
     }
-  } catch (error) {
-    alert(error.message);
-  }
-});
-
-exitApp.addEventListener("click", async () => {
-  try {
-    await fetch("/api/exit", { method: "POST" });
-    setTimeout(() => window.close(), 150);
   } catch (error) {
     alert(error.message);
   }

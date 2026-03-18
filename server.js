@@ -18,10 +18,10 @@ const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const STARTUP_URL = `http://localhost:${PORT}`;
 let serverRef = null;
 
-const MIGOTO_DIR = path.join(ROOT_DIR, "3dmigoto");
+let MIGOTO_DIR = path.join(ROOT_DIR, "3dmigoto");
 const CHAR_PORTRAIT_DIR = path.join(ROOT_DIR, "charportrait");
-const MODS_DIR = path.join(MIGOTO_DIR, "Mods");
-const DISABLE_DIR = path.join(MIGOTO_DIR, "Disable");
+let MODS_DIR = path.join(MIGOTO_DIR, "Mods");
+let DISABLE_DIR = path.join(MIGOTO_DIR, "Disable");
 const CHARACTERS_SUBDIR = "Personajes";
 const GENERAL_IGNORED_FOLDERS = new Set(["BufferValues", "TexFx-main"]);
 const ALLOWED_FIX_EXTENSIONS = new Set([".exe", ".bat", ".cmd"]);
@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   },
   characterNames: [],
   hideEmptyCharacters: false,
+  disableAutoDeactivate: false,
   theme: {
     primary: "#255ea4",
     uninstall: "#4a1f28",
@@ -105,11 +106,61 @@ function requestExit() {
   }, 100);
 }
 
-async function ensureBaseDirs() {
-  await fs.mkdir(MODS_DIR, { recursive: true });
-  await fs.mkdir(DISABLE_DIR, { recursive: true });
-  await fs.mkdir(path.join(MODS_DIR, CHARACTERS_SUBDIR), { recursive: true });
-  await fs.mkdir(path.join(DISABLE_DIR, CHARACTERS_SUBDIR), { recursive: true });
+function setMigotoBaseDir(baseDir) {
+  MIGOTO_DIR = baseDir;
+  MODS_DIR = path.join(MIGOTO_DIR, "Mods");
+  DISABLE_DIR = path.join(MIGOTO_DIR, "Disable");
+}
+
+function normalizeMigotoBase(rawPath) {
+  const normalized = normalizeWhitespace(rawPath || "");
+  if (!normalized) return "";
+  const ext = path.extname(normalized).toLowerCase();
+  if ([".exe", ".bat", ".cmd", ".lnk"].includes(ext)) {
+    return path.dirname(normalized);
+  }
+  return normalized;
+}
+
+async function ensureBaseDirs(baseDir) {
+  const modsDir = path.join(baseDir, "Mods");
+  const disableDir = path.join(baseDir, "Disable");
+  await fs.mkdir(modsDir, { recursive: true });
+  await fs.mkdir(disableDir, { recursive: true });
+  await fs.mkdir(path.join(modsDir, CHARACTERS_SUBDIR), { recursive: true });
+  await fs.mkdir(path.join(disableDir, CHARACTERS_SUBDIR), { recursive: true });
+}
+
+async function validateMigotoStructure(baseDir) {
+  const baseStat = await statSafe(baseDir);
+  if (!baseStat || !baseStat.isDirectory()) {
+    return { ok: false, error: "La carpeta de 3dmigoto no existe o no es válida." };
+  }
+  const required = [
+    path.join(baseDir, "Mods"),
+    path.join(baseDir, "Disable"),
+    path.join(baseDir, "Mods", CHARACTERS_SUBDIR),
+    path.join(baseDir, "Disable", CHARACTERS_SUBDIR),
+  ];
+  const missing = [];
+  for (const dir of required) {
+    const stat = await statSafe(dir);
+    if (!stat || !stat.isDirectory()) {
+      missing.push(dir);
+    }
+  }
+  return { ok: true, missing };
+}
+
+async function pickMigotoFolderWin() {
+  const command = [
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+    "$dialog.Description = 'Selecciona la carpeta de 3dmigoto'",
+    "$dialog.ShowNewFolderButton = $true",
+    "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.SelectedPath }",
+  ].join("; ");
+  return await runPowerShellCommand(command);
 }
 
 function sendJson(res, statusCode, payload) {
@@ -221,6 +272,7 @@ function sanitizeSettings(input) {
     },
     characterNames: [],
     hideEmptyCharacters: Boolean(raw.hideEmptyCharacters),
+    disableAutoDeactivate: Boolean(raw.disableAutoDeactivate),
     theme: {
       primary: DEFAULT_SETTINGS.theme.primary,
       uninstall: DEFAULT_SETTINGS.theme.uninstall,
@@ -402,30 +454,39 @@ async function resolvePortraitFile(characterName) {
 
 async function readSettings() {
   if (!(await pathExists(SETTINGS_PATH))) {
-    return {
+    const fallback = {
       ...DEFAULT_SETTINGS,
       paths: { ...DEFAULT_SETTINGS.paths },
       characterNames: [],
       theme: { ...DEFAULT_SETTINGS.theme },
     };
+    setMigotoBaseDir(MIGOTO_DIR);
+    return fallback;
   }
   try {
     const raw = await fs.readFile(SETTINGS_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    return sanitizeSettings(parsed);
+    const safe = sanitizeSettings(parsed);
+    const configured = normalizeMigotoBase(safe.paths.gimi);
+    setMigotoBaseDir(configured || MIGOTO_DIR);
+    return safe;
   } catch {
-    return {
+    const fallback = {
       ...DEFAULT_SETTINGS,
       paths: { ...DEFAULT_SETTINGS.paths },
       characterNames: [],
       theme: { ...DEFAULT_SETTINGS.theme },
     };
+    setMigotoBaseDir(MIGOTO_DIR);
+    return fallback;
   }
 }
 
 async function writeSettings(input) {
   const safe = sanitizeSettings(input);
   await fs.writeFile(SETTINGS_PATH, `${JSON.stringify(safe, null, 2)}\n`, "utf-8");
+  const configured = normalizeMigotoBase(safe.paths.gimi);
+  setMigotoBaseDir(configured || MIGOTO_DIR);
   return safe;
 }
 
@@ -644,6 +705,7 @@ function normalizeModData({
   const character = pickMetaValue(mmInfo, ["character", "personaje"]);
   const description = pickMetaValue(mmInfo, ["description", "descripcion", "notes", "note"]);
   const image = pickMetaValue(mmInfo, ["image", "imagen", "preview", "cover"]);
+  const parent = pickMetaValue(mmInfo, ["parent", "parentmod", "parentfolder"]);
   return {
     id: `${normalizedType}|${name}`,
     folderName: name,
@@ -652,6 +714,7 @@ function normalizeModData({
     character: character || (normalizedType === "character" ? "Sin definir" : null),
     description,
     image,
+    parent,
     isActive,
     hasMetadata: Object.keys(mmInfo).length > 0,
   };
@@ -714,6 +777,36 @@ async function toggleMod({ folderName, type, isActive }) {
   }
 
   await fs.rename(sourcePath, targetPath);
+
+  if (safeType === "character" && !currentActive) {
+    const settings = await readSettings();
+    if (settings.disableAutoDeactivate) {
+      return;
+    }
+    const currentInfo = await parseMmInfo(targetPath);
+    const currentCharacter = pickMetaValue(currentInfo, ["character", "personaje"]);
+    const currentKey = normalizePersonNameForMatch(currentCharacter);
+    if (currentKey) {
+      const currentGroup = pickMetaValue(currentInfo, ["parent", "parentmod", "parentfolder"]) || safeName;
+      const activeDir = path.join(MODS_DIR, CHARACTERS_SUBDIR);
+      const entries = await fs.readdir(activeDir, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name === safeName) continue;
+        const otherPath = path.join(activeDir, entry.name);
+        const otherInfo = await parseMmInfo(otherPath);
+        const otherCharacter = pickMetaValue(otherInfo, ["character", "personaje"]);
+        const otherKey = normalizePersonNameForMatch(otherCharacter);
+        if (!otherKey || otherKey !== currentKey) continue;
+        const otherGroup = pickMetaValue(otherInfo, ["parent", "parentmod", "parentfolder"]) || entry.name;
+        if (otherGroup === currentGroup) continue;
+        const targetDisable = path.join(DISABLE_DIR, CHARACTERS_SUBDIR, entry.name);
+        if (!(await pathExists(targetDisable))) {
+          await fs.rename(otherPath, targetDisable);
+        }
+      }
+    }
+  }
 }
 
 async function resolveExistingModPath(type, folderName) {
@@ -742,6 +835,7 @@ async function saveCharacterMmInfo({
   title,
   character,
   description,
+  parent,
   image,
   imageFileName,
   imageContentBase64,
@@ -800,11 +894,30 @@ async function saveCharacterMmInfo({
     imageValue = downloadedName;
   }
 
+  let parentValue = (parent || "").trim();
+  if (parentValue) {
+    if (parentValue === folderName) {
+      throw new Error("El mod padre no puede ser el mismo mod.");
+    }
+    const { modPath: parentPath } = await resolveExistingModPath("character", parentValue);
+    const parentInfo = await parseMmInfo(parentPath);
+    const parentCharacter = pickMetaValue(parentInfo, ["character", "personaje"]);
+    const currentCharacter = (character || "").trim();
+    if (parentCharacter && currentCharacter) {
+      const parentKey = normalizePersonNameForMatch(parentCharacter);
+      const currentKey = normalizePersonNameForMatch(currentCharacter);
+      if (parentKey && currentKey && parentKey !== currentKey) {
+        throw new Error("El mod padre debe ser del mismo personaje.");
+      }
+    }
+  }
+
   const mmInfoJsonPath = path.join(modPath, "mminfo.json");
   const mmInfo = {
     title: (title || "").trim(),
     character: (character || "").trim(),
     description: (description || "").trim(),
+    parent: parentValue,
     image: imageValue,
     type: "character",
   };
@@ -1883,12 +1996,25 @@ async function launchConfiguredTarget(target) {
   const settings = await readSettings();
   const configuredPath = safeTarget === "gimi" ? settings.paths.gimi : settings.paths.genshin;
   if (!configuredPath) {
-    throw new Error(`Configura primero la ruta de ${safeTarget === "gimi" ? "3DGIMI" : "Genshin Impact"} en Ajustes.`);
+    throw new Error(`Configura primero la ${safeTarget === "gimi" ? "carpeta de 3dmigoto" : "ruta de Genshin Impact"} en Ajustes.`);
   }
-  const normalizedPath = path.normalize(configuredPath);
+  let normalizedPath = path.normalize(configuredPath);
+  if (safeTarget === "gimi") {
+    const baseDir = normalizeMigotoBase(normalizedPath);
+    const baseStat = await statSafe(baseDir);
+    if (!baseStat || !baseStat.isDirectory()) {
+      throw new Error(`No existe la carpeta configurada: ${configuredPath}`);
+    }
+    const entries = await fs.readdir(baseDir).catch(() => []);
+    const loader = entries.find((name) => name.toLowerCase() === "3dmigoto loader.exe");
+    if (!loader) {
+      throw new Error("No se encontró '3DMigoto Loader.exe' en la carpeta indicada.");
+    }
+    normalizedPath = path.join(baseDir, loader);
+  }
   const stat = await statSafe(normalizedPath);
   if (!stat || !stat.isFile()) {
-    throw new Error(`No existe el ejecutable configurado: ${configuredPath}`);
+    throw new Error(`No existe el ejecutable configurado: ${normalizedPath}`);
   }
   const ext = path.extname(normalizedPath).toLowerCase();
 
@@ -1999,8 +2125,54 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "GET" && pathname === "/api/open-3dmigoto-folder") {
-    await openFolder(MIGOTO_DIR);
+    const settings = await readSettings();
+    const configured = normalizeMigotoBase(settings.paths.gimi);
+    await openFolder(configured || MIGOTO_DIR);
     sendJson(res, 200, { ok: true });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/paths/3dmigoto/validate") {
+    const body = await readJsonBody(req);
+    const baseDir = normalizeMigotoBase(body?.baseDir || "");
+    if (!baseDir) {
+      throw new Error("Falta la carpeta de 3dmigoto.");
+    }
+    const result = await validateMigotoStructure(baseDir);
+    if (!result.ok) {
+      sendJson(res, 200, { ok: false, error: result.error });
+      return true;
+    }
+    sendJson(res, 200, { ok: true, missing: result.missing });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/paths/3dmigoto/ensure") {
+    const body = await readJsonBody(req);
+    const baseDir = normalizeMigotoBase(body?.baseDir || "");
+    if (!baseDir) {
+      throw new Error("Falta la carpeta de 3dmigoto.");
+    }
+    await ensureBaseDirs(baseDir);
+    const result = await validateMigotoStructure(baseDir);
+    if (!result.ok || result.missing.length) {
+      throw new Error("No se pudieron crear las carpetas necesarias.");
+    }
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/paths/3dmigoto/pick") {
+    if (process.platform !== "win32") {
+      sendJson(res, 200, { ok: false, error: "Selector de carpetas solo disponible en Windows." });
+      return true;
+    }
+    const selectedPath = await pickMigotoFolderWin();
+    if (!selectedPath) {
+      sendJson(res, 200, { ok: false, cancelled: true });
+      return true;
+    }
+    sendJson(res, 200, { ok: true, path: selectedPath });
     return true;
   }
 
@@ -2153,7 +2325,11 @@ async function handleStatic(req, res, pathname) {
 }
 
 async function start() {
-  await ensureBaseDirs();
+  const settings = await readSettings();
+  const configured = normalizeMigotoBase(settings.paths.gimi);
+  if (!configured) {
+    await ensureBaseDirs(MIGOTO_DIR);
+  }
 
   const server = http.createServer(async (req, res) => {
     try {
