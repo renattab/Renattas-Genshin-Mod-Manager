@@ -1,3 +1,8 @@
+// pkg + undici quirk: define File for fetch internals in bundled builds.
+if (typeof globalThis.File === "undefined") {
+  globalThis.File = class File {};
+}
+
 const fs = require("fs/promises");
 const fssync = require("fs");
 const http = require("http");
@@ -8,7 +13,7 @@ const { URL } = require("url");
 const cheerio = require("cheerio");
 
 const PORT = 3210;
-const ROOT_DIR = __dirname;
+const ROOT_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const STARTUP_URL = `http://localhost:${PORT}`;
 let serverRef = null;
@@ -59,6 +64,7 @@ function browserLikeHeaders() {
 }
 
 function openBrowser(url) {
+  if (process.env.RGMM_ELECTRON === "1") return;
   let child;
   if (process.platform === "win32") {
     child = spawn("cmd.exe", ["/c", "start", "", url], {

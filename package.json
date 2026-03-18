@@ -1,13 +1,19 @@
 {
-  "name": "genshin-super-mod-manager",
+  "name": "renattas-genshin-mod-manager",
   "version": "0.1.0",
   "private": true,
   "description": "Mod manager local para 3DMigoto (Genshin Impact)",
-  "main": "server.js",
+  "main": "electron-main.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "electron .",
+    "start:server": "node server.js"
   },
   "dependencies": {
     "cheerio": "^1.2.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.14.1",
+    "electron": "^31.2.0",
+    "pkg": "^5.8.1"
   }
 }

@@ -1,9 +1,9 @@
-JGMM - GUIA RAPIDA
+RGMM - GUIA RAPIDA
 ==================
 
 1) QUE ES
 ---------
-JGMM (Joaquin's Genshin Mod Manager) es un gestor local para mods de Genshin con 3DMigoto.
+RGMM (Renatta's Genshin Mod Manager) es un gestor local para mods de Genshin con 3DMigoto.
 Permite activar/desactivar, instalar, desinstalar, editar metadata, aplicar fixes e importar mods desde enlace.
 
 

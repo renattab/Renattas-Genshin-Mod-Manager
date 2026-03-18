@@ -2,7 +2,7 @@
 // @name         GSMM - Descargar En Mod Manager
 // @namespace    gsmm-local
 // @version      1.1.0
-// @description  Agrega un boton en GameBanana para importar el mod directamente a Genshin Super Mod Manager.
+// @description  Agrega un boton en GameBanana para importar el mod directamente a Renatta's Genshin Mod Manager (RGMM).
 // @author       Joaquin
 // @match        https://gamebanana.com/mods/*
 // @match        https://www.gamebanana.com/mods/*

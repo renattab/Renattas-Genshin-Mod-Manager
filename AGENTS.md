@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Proyecto
-JGMM es un mod manager local para Genshin basado en Node.js. El servidor es HTTP nativo en `server.js` y el frontend vive en `public/`.
+RGMM (Renatta's Genshin Mod Manager) es un mod manager local para Genshin basado en Node.js. El servidor es HTTP nativo en `server.js` y el frontend vive en `public/`.
 
 ## Objetivo
 Mantener la app simple, offline-first y segura para rutas locales. Evitar dependencias innecesarias.

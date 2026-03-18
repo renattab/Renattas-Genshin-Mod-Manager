@@ -34,16 +34,21 @@ const openSettingsModal = document.getElementById("openSettingsModal");
 const openMigotoFolder = document.getElementById("openMigotoFolder");
 const exitApp = document.getElementById("exitApp");
 
-if (!window.opener && window.name !== "jgmm_main") {
-  const opened = window.open(window.location.href, "jgmm_main");
-  if (opened) {
-    opened.focus();
-    window.close();
-  } else {
-    window.name = "jgmm_main";
+const isElectronHost = new URLSearchParams(window.location.search).has("rgmm");
+if (!isElectronHost) {
+  if (!window.opener && window.name !== "rgmm_main") {
+    const opened = window.open(window.location.href, "rgmm_main");
+    if (opened) {
+      opened.focus();
+      window.close();
+    } else {
+      window.name = "rgmm_main";
+    }
+  } else if (window.name !== "rgmm_main") {
+    window.name = "rgmm_main";
   }
-} else if (window.name !== "jgmm_main") {
-  window.name = "jgmm_main";
+} else if (window.name !== "rgmm_main") {
+  window.name = "rgmm_main";
 }
 const openThemeFromSettings = document.getElementById("openThemeFromSettings");
 const settingsModal = document.getElementById("settingsModal");

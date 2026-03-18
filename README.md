@@ -1,4 +1,4 @@
-# Genshin Super Mod Manager (MVP)
+# Renatta's Genshin Mod Manager (RGMM)
 
 App local en HTML + JavaScript para gestionar mods de `3dmigoto`.
 
